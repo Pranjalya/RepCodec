@@ -13,6 +13,8 @@ from typing import Optional, Union
 
 import soundfile as sf
 import torch
+import torchaudio
+import torchaudio.transforms as T
 from whisper import _MODELS, _download, _ALIGNMENT_HEADS, available_models
 from whisper.audio import log_mel_spectrogram
 from whisper.model import ModelDimensions
@@ -104,6 +106,17 @@ class WhisperFeatureReader(object):
         audio_length = len(wav)
         with torch.no_grad():
             mel = log_mel_spectrogram(torch.from_numpy(wav).float().to(self.device))
+            hidden = self.model.extract_features(mel.unsqueeze(0), target_layer=self.layer)
+            feature_length = audio_length // 320
+            hidden = hidden[0, :feature_length]
+        return hidden.contiguous()
+
+    def get_feats_tensor(self, wav, rate=None, ref_len=None):
+        if rate is not None and rate != 16000:
+            wav = T.Resample(rate, 16000)(wav)
+        audio_length = len(wav)
+        with torch.no_grad():
+            mel = log_mel_spectrogram(wav.float().to(self.device))
             hidden = self.model.extract_features(mel.unsqueeze(0), target_layer=self.layer)
             feature_length = audio_length // 320
             hidden = hidden[0, :feature_length]
